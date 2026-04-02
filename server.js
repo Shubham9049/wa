@@ -30,7 +30,6 @@ app.post("/webhook", async (req, res) => {
       const from = message.from;
       const text = message.text?.body || "";
 
-      // 🔥 1. Find or Create User
       let user = await User.findOne({ phone: from });
 
       if (!user) {
@@ -40,30 +39,19 @@ app.post("/webhook", async (req, res) => {
         });
       }
 
-      // 🔥 2. Save Incoming Message
-      await Message.create({
+      const newMsg = await Message.create({
         user: user._id,
         from: from,
         text: text,
         type: "incoming",
       });
 
-      console.log("💾 Saved Message:", text);
+      // 🔥 REAL-TIME EMIT
+      io.emit("newMessage", newMsg);
 
-      // 🔥 3. Auto Reply
-      const reply = "Hello 👋 How can we help you?";
-      await sendMessage(from, reply);
-
-      // 🔥 4. Save Outgoing Message
-      await Message.create({
-        user: user._id,
-        from: "business",
-        text: reply,
-        type: "outgoing",
-      });
+      console.log("📡 Incoming message sent to frontend");
+      await sendMessage(from, "Hello 👋 How can we help you?");
     }
-    console.log("🔥 Webhook POST HIT");
-    console.log(JSON.stringify(req.body, null, 2));
 
     res.sendStatus(200);
   } catch (err) {
@@ -72,6 +60,42 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
+app.get("/users", async (req, res) => {
+  const users = await User.find().sort({ updatedAt: -1 });
+  res.json(users);
+});
+
+app.get("/messages/:userId", async (req, res) => {
+  const messages = await Message.find({
+    user: req.params.userId,
+  }).sort({ createdAt: 1 });
+
+  res.json(messages);
+});
+
+app.post("/send", async (req, res) => {
+  const { to, message } = req.body;
+
+  try {
+    await sendMessage(to, message);
+
+    const user = await User.findOne({ phone: to });
+
+    const savedMessage = await Message.create({
+      user: user._id,
+      from: "business",
+      text: message,
+      type: "outgoing",
+    });
+
+    // ✅ YAHI ADD KARO
+    io.emit("newMessage", savedMessage);
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // ✅ Send Message Function
 const sendMessage = async (to, message) => {
   await axios.post(
@@ -91,4 +115,27 @@ const sendMessage = async (to, message) => {
   );
 };
 
-app.listen(5000, () => console.log("🚀 Server Running"));
+const http = require("http");
+const { Server } = require("socket.io");
+
+const server = http.createServer(app);
+
+// ✅ Socket setup
+const io = new Server(server, {
+  cors: {
+    origin: "*", // later frontend URL dalna
+  },
+});
+
+// ✅ Connection event
+io.on("connection", (socket) => {
+  console.log("🟢 User connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("🔴 User disconnected:", socket.id);
+  });
+});
+
+// ✅ Start server
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => console.log(`🚀 Server running on ${PORT}`));
