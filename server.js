@@ -4,9 +4,15 @@ const bodyParser = require("body-parser");
 const connectDB = require("./config/db");
 const User = require("./models/User");
 const Message = require("./models/Message");
+const cors = require("cors");
 require("dotenv").config();
 
 const app = express();
+app.use(
+  cors({
+    origin: "*",
+  }),
+);
 app.use(bodyParser.json());
 
 connectDB();
