@@ -83,10 +83,27 @@ app.post("/send", async (req, res) => {
   const { to, message } = req.body;
 
   try {
-    await sendMessage(to, message);
+    console.log("📤 Sending to:", to);
+    console.log("💬 Message:", message);
 
-    const user = await User.findOne({ phone: to });
+    // ✅ Try WhatsApp send (but don't crash)
+    try {
+      await sendMessage(to, message);
+    } catch (err) {
+      console.error("❌ WhatsApp Error:", err.response?.data || err.message);
+    }
 
+    // ✅ Find or create user
+    let user = await User.findOne({ phone: to });
+
+    if (!user) {
+      user = await User.create({
+        phone: to,
+        name: "User " + to.slice(-4),
+      });
+    }
+
+    // ✅ Save message
     const savedMessage = await Message.create({
       user: user._id,
       from: "business",
@@ -94,11 +111,11 @@ app.post("/send", async (req, res) => {
       type: "outgoing",
     });
 
-    // ✅ YAHI ADD KARO
     io.emit("newMessage", savedMessage);
 
     res.json({ success: true });
   } catch (err) {
+    console.error("❌ FINAL ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
