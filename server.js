@@ -62,6 +62,8 @@ app.post("/webhook", async (req, res) => {
         type: "outgoing",
       });
     }
+    console.log("🔥 Webhook POST HIT");
+    console.log(JSON.stringify(req.body, null, 2));
 
     res.sendStatus(200);
   } catch (err) {
